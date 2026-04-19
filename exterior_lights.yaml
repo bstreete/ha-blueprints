@@ -1,38 +1,44 @@
 blueprint:
-  name: Door-Triggered Light with Manual Override
-  description: Turns on a light for a set time when doors open. Manual toggle keeps it on.
+  name: Door-Triggered Light (Sun Elevation) with Override
+  description: Turns on light when doors open ONLY if the sun is below a specific angle. Manual toggle stays on.
   domain: automation
   input:
     door_sensors:
       name: Door Sensors
-      description: Select one or more door sensors.
       selector:
         entity:
           domain: binary_sensor
           multiple: true
     target_light:
       name: Light Relay
-      description: The light or switch relay to control.
       selector:
         entity:
           domain: [light, switch]
     timer_helper:
       name: Timer Helper
-      description: Select a Timer Helper (with 'Restore' enabled) for this specific light.
       selector:
         entity:
           domain: timer
     run_duration:
       name: Auto-off Duration
-      description: How long the light stays on (e.g., 5 minutes).
       default: 300
       selector:
         number:
           min: 1
           max: 3600
           unit_of_measurement: seconds
+    elevation_threshold:
+      name: Sun Elevation Threshold
+      description: Light only triggers if sun is below this angle. 0 is horizon, -6 is civil twilight.
+      default: -1.0
+      selector:
+        number:
+          min: -90.0
+          max: 90.0
+          mode: box
+          unit_of_measurement: "°"
 
-mode: restart # Restarts timer if door is opened again
+mode: restart
 
 trigger:
   - platform: state
@@ -50,10 +56,14 @@ trigger:
 
 action:
   - choose:
-      # SCENARIO 1: Door Opens
+      # SCENARIO 1: Door Opens (Check Sun Elevation)
       - conditions:
           - condition: trigger
             id: "door_opened"
+          - condition: numeric_state
+            entity_id: sun.sun
+            attribute: elevation
+            below: !input elevation_threshold
         sequence:
           - service: homeassistant.turn_on
             target:
@@ -73,13 +83,13 @@ action:
             target:
               entity_id: !input target_light
 
-      # SCENARIO 3: Manual Toggle (Cancel Timer)
+      # SCENARIO 3: Manual Toggle
       - conditions:
           - condition: trigger
             id: "manual_on"
           - condition: state
             entity_id: !input timer_helper
-            state: "idle" # If light turns on and timer ISN'T active, it's manual
+            state: "idle"
         sequence:
           - service: timer.cancel
             target:
