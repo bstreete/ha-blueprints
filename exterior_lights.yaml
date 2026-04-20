@@ -40,11 +40,13 @@ blueprint:
 
 mode: restart
 
-trigger:
+trigger:  
   - platform: state
-    entity_id: !input door_sensors
-    to: "on"
-    id: "door_opened"
+    entity_id: binary_sensor.your_door
+    to: "closed"
+    not_from:
+      - "unknown"
+      - "unavailable"
   - platform: state
     entity_id: !input timer_helper
     to: "idle"
@@ -58,8 +60,6 @@ action:
   - choose:
       # SCENARIO 1: Door Opens (Check Sun Elevation)
       - conditions:
-          - condition: uptime
-            after: "00:01:00" # Ignore all triggers for the first 60 seconds of boot
           - condition: trigger
             id: "door_opened"
           - condition: numeric_state
