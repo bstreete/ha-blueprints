@@ -58,6 +58,8 @@ action:
   - choose:
       # SCENARIO 1: Door Opens (Check Sun Elevation)
       - conditions:
+          - condition: uptime
+            after: "00:01:00" # Ignore all triggers for the first 60 seconds of boot
           - condition: trigger
             id: "door_opened"
           - condition: numeric_state
