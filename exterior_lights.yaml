@@ -43,7 +43,7 @@ mode: restart
 trigger:  
   - platform: state
     entity_id: binary_sensor.your_door
-    to: "closed"
+    to: "open"
     not_from:
       - "unknown"
       - "unavailable"
