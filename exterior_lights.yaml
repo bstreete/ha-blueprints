@@ -1,6 +1,6 @@
 blueprint:
-  name: Exterior Lights - Door Sensor (Manual Override + Sun Check)
-  description: Turns on lights when a door opens, but ONLY if they were off AND it is dark outside.
+  name: Exterior Lights - Door Sensor (Final Fixed)
+  description: Turns on lights when a door opens, but ONLY if they were off AND it is dark.
   domain: automation
   input:
     door_sensor:
@@ -19,7 +19,7 @@ blueprint:
           multiple: true
     sun_elevation:
       name: Max Sun Elevation
-      description: Solar angle to stay below. 0 is the horizon; -6 is the end of civil twilight (getting very dark).
+      description: Solar angle to stay below. 0 is sunset/sunrise.
       default: 0
       selector:
         number:
@@ -46,9 +46,12 @@ trigger:
   to: "on"
 
 condition:
-  - condition: state
-    entity_id: !input light_target
-    state: "off"
+  # Check 1: Ensure all selected lights are currently OFF
+  - condition: template
+    value_template: >
+      {% set entities = !input light_target %}
+      {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+  # Check 2: Ensure sun is below the threshold
   - condition: numeric_state
     entity_id: sun.sun
     attribute: elevation
