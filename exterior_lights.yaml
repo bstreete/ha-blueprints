@@ -11,7 +11,6 @@ blueprint:
           device_class: door
     light_target:
       name: Exterior Lights or Relays
-      description: Select one or more lights/switches from the list.
       selector:
         entity:
           domain: 
@@ -36,12 +35,13 @@ trigger:
   to: "on"
 
 condition:
-  # This checks if any of the selected entities are already "on"
+  # Checks if any of the selected entities are already "on"
   - condition: template
     value_template: >
-      {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+      {{ expand(light_target_entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+    # We use the !input directly in the template instead of a variables key
     variables:
-      entities: !input light_target
+      light_target_entities: !input light_target
 
 action:
   - service: homeassistant.turn_on
