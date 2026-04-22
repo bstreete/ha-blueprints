@@ -1,203 +1,51 @@
 blueprint:
-  name: Door-Triggered Exterior Light with Nightly Backup
-  description: >
-    Turns on lights/relays when one or more door sensors open, but only when
-    the sun is below a configured elevation angle. Lights auto-off after a
-    configurable timeout. Manual activation bypasses the timeout. Performs a
-    nightly backup of Home Assistant and restarts supporting Docker containers
-    without interrupting active light sessions.
+  name: Exterior Lights - Door Sensor (Manual Override)
+  description: Turns on lights when a door opens, but ONLY if they were off.
   domain: automation
   input:
-    door_sensors:
-      name: Door Sensors
-      description: One or more door/contact sensors that trigger the lights.
+    door_sensor:
+      name: Door Sensor
       selector:
         entity:
           domain: binary_sensor
           device_class: door
-          multiple: true
-
-    target_lights:
-      name: Lights / Relays
-      description: One or more lights or switch relays to control.
+    light_target:
+      name: Exterior Lights
       selector:
-        entity:
-          domain:
-            - light
-            - switch
-          multiple: true
-
-    run_duration:
-      name: Auto-off Duration
-      description: How long to keep the lights on after a door trigger (seconds).
-      default: 300
+        target:
+          entity:
+            domain: light
+    off_delay:
+      name: Off Delay
+      default: 120
       selector:
         number:
-          min: 1
+          min: 0
           max: 3600
           unit_of_measurement: seconds
-          mode: slider
 
-    elevation_threshold:
-      name: Sun Elevation Threshold
-      description: >
-        Lights only trigger when the sun is below this angle.
-        0 = horizon, -6 = civil twilight. Default -1 fires just after sunset.
-      default: -1.0
-      selector:
-        number:
-          min: -90.0
-          max: 90.0
-          step: 0.5
-          mode: box
-          unit_of_measurement: "°"
-
-
-variables:
-  # Snapshot of lights state used to detect manual-on vs automation-on.
-  # We track this via a context comparison in the manual_on scenario.
-  _lights: !input target_lights
-  _sensors: !input door_sensors
+mode: single # Changed to single so it doesn't reset if the door is opened again
 
 trigger:
-  # --- Door sensor(s) opened ---
-  - platform: state
-    entity_id: !input door_sensors
-    to: "on"                   # binary_sensor "on" == open
-    not_from:
-      - "unknown"
-      - "unavailable"
-    id: door_opened
+  platform: state
+  entity_id: !input door_sensor
+  from: "off"
+  to: "on"
 
-  # --- Sensors recovering from unknown/unavailable ---
-  # Re-evaluate but do NOT blindly trigger lights; handled in conditions below.
-  - platform: state
-    entity_id: !input door_sensors
-    from: "unknown"
-    id: sensor_recovered
-  - platform: state
-    entity_id: !input door_sensors
-    from: "unavailable"
-    id: sensor_recovered
-
-  # --- Auto-off timer (inline wait, no helper entity required) ---
-  - platform: event
-    event_type: automation_triggered_light_timer
-    id: timer_done
-
-  # --- Manual light activation detection ---
-  - platform: state
-    entity_id: !input target_lights
-    to: "on"
-    id: manual_on
-
-mode: queued
-max: 10
+condition:
+  # This ensures the automation only proceeds if the light is currently OFF
+  - condition: state
+    entity_id: !input light_target
+    state: "off"
 
 action:
-  - choose:
-
-    ##################################################################
-    # SCENARIO 1: Door opened — only act when dark
-    ##################################################################
-    - conditions:
-        - condition: trigger
-          id: door_opened
-        - condition: numeric_state
-          entity_id: sun.sun
-          attribute: elevation
-          below: !input elevation_threshold
-      sequence:
-        # Turn on all configured lights/relays
-        - service: homeassistant.turn_on
-          target:
-            entity_id: !input target_lights
-
-        # Store automation context so manual_on can distinguish us
-        - service: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.exterior_light_manual_override
-          continue_on_error: true
-
-        # Wait for the configured duration, but bail early if:
-        #   a) lights are turned off manually
-        #   b) a manual_on fires (handled separately via queued mode)
-        - wait_for_trigger:
-            - platform: state
-              entity_id: !input target_lights
-              to: "off"
-          timeout:
-            seconds: !input run_duration
-          continue_on_timeout: true
-
-        # Only turn off if we timed out (wait_completed == true means manual
-        # turn-off already happened; skip to avoid double-off).
-        - condition: template
-          value_template: "{{ wait.completed }}"
-
-        # Final guard: don't turn off if a manual override is active
-        - condition: state
-          entity_id: input_boolean.exterior_light_manual_override
-          state: "off"
-          continue_on_error: true
-
-        - service: homeassistant.turn_off
-          target:
-            entity_id: !input target_lights
-
-    ##################################################################
-    # SCENARIO 2: Sensor recovered from unknown/unavailable
-    # Re-check if door is currently open AND dark — if so, treat as
-    # a fresh door_opened event so a stuck-open door after a restart
-    # still activates the lights correctly.
-    ##################################################################
-    - conditions:
-        - condition: trigger
-          id: sensor_recovered
-        - condition: template
-          value_template: >
-            {{ trigger.to_state.state == 'on' }}
-        - condition: numeric_state
-          entity_id: sun.sun
-          attribute: elevation
-          below: !input elevation_threshold
-      sequence:
-        - service: homeassistant.turn_on
-          target:
-            entity_id: !input target_lights
-        - wait_for_trigger:
-            - platform: state
-              entity_id: !input target_lights
-              to: "off"
-          timeout:
-            seconds: !input run_duration
-          continue_on_timeout: true
-        - condition: template
-          value_template: "{{ wait.completed }}"
-        - condition: state
-          entity_id: input_boolean.exterior_light_manual_override
-          state: "off"
-          continue_on_error: true
-        - service: homeassistant.turn_off
-          target:
-            entity_id: !input target_lights
-
-    ##################################################################
-    # SCENARIO 3: Manual light activation — cancel auto-off timeout
-    # Only fires when the light was turned on by a person (context
-    # differs from this automation's own context ID).
-    ##################################################################
-    - conditions:
-        - condition: trigger
-          id: manual_on
-        - condition: template
-          # Fires only when the turn-on was NOT triggered by this automation
-          value_template: >
-            {{ trigger.to_state.context.parent_id is none or
-               trigger.to_state.context.user_id is not none }}
-      sequence:
-        # Flag manual override so the auto-off sequence skips turn-off
-        - service: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.exterior_light_manual_override
-          continue_on_error: true
+  - service: light.turn_on
+    target: !input light_target
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input door_sensor
+        from: "on"
+        to: "off"
+  - delay: !input off_delay
+  - service: light.turn_off
+    target: !input light_target
