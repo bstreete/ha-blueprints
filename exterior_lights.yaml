@@ -12,19 +12,11 @@ blueprint:
     light_target:
       name: Exterior Lights or Relays
       selector:
-        target:
-          entity:
-            domain: 
-              - light
-              - switch
-    off_delay:
-      name: Off Delay
-      default: 120
-      selector:
-        number:
-          min: 0
-          max: 3600
-          unit_of_measurement: seconds
+        entity:
+          domain: 
+            - light
+            - switch
+          multiple: true # Allows selecting several items at once
 
 mode: single
 
@@ -35,8 +27,7 @@ trigger:
   to: "on"
 
 condition:
-  # This template expands your target (entities, areas, or devices) 
-  # and only proceeds if ALL of them are currently OFF.
+  # Check if all selected entities are currently OFF
   - condition: template
     value_template: >
       {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
@@ -44,9 +35,9 @@ condition:
       entities: !input light_target
 
 action:
-  # Use homeassistant.turn_on to support both lights and switches (relays)
   - service: homeassistant.turn_on
-    target: !input light_target
+    target:
+      entity_id: !input light_target
   - wait_for_trigger:
       - platform: state
         entity_id: !input door_sensor
@@ -54,4 +45,5 @@ action:
         to: "off"
   - delay: !input off_delay
   - service: homeassistant.turn_off
-    target: !input light_target
+    target:
+      entity_id: !input light_target
