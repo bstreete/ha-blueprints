@@ -35,18 +35,11 @@ trigger:
   to: "on"
 
 condition:
-  - condition: template
-    value_template: >
-      {% set entities = (input_entities) %}
-      {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
-    # We pass the input directly into the template variables
-    variables:
-      input_entities: !input light_target
-
-# IF THE ERROR PERSISTS, USE THIS ALTERNATIVE CONDITION BLOCK INSTEAD:
-# condition:
-#   - condition: template
-#     value_template: "{{ expand(light_target) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+  # This native condition works perfectly with multiple entities 
+  # without needing the "variables" key that caused your error.
+  - condition: state
+    entity_id: !input light_target
+    state: "off"
 
 action:
   - service: homeassistant.turn_on
