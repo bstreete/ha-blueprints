@@ -1,6 +1,6 @@
 blueprint:
-  name: Exterior Lights - Door Sensor (Manual Override)
-  description: Turns on lights when a door opens, but ONLY if they were off.
+  name: Exterior Lights/Relays - Door Sensor (Manual Override)
+  description: Turns on lights or relays when a door opens, but ONLY if they were off.
   domain: automation
   input:
     door_sensor:
@@ -10,11 +10,13 @@ blueprint:
           domain: binary_sensor
           device_class: door
     light_target:
-      name: Exterior Lights
+      name: Exterior Lights or Relays
       selector:
         target:
           entity:
-            domain: light
+            domain: 
+              - light
+              - switch
     off_delay:
       name: Off Delay
       default: 120
@@ -24,7 +26,7 @@ blueprint:
           max: 3600
           unit_of_measurement: seconds
 
-mode: single # Changed to single so it doesn't reset if the door is opened again
+mode: single
 
 trigger:
   platform: state
@@ -33,13 +35,17 @@ trigger:
   to: "on"
 
 condition:
-  # This ensures the automation only proceeds if the light is currently OFF
-  - condition: state
-    entity_id: !input light_target
-    state: "off"
+  # This template expands your target (entities, areas, or devices) 
+  # and only proceeds if ALL of them are currently OFF.
+  - condition: template
+    value_template: >
+      {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+    variables:
+      entities: !input light_target
 
 action:
-  - service: light.turn_on
+  # Use homeassistant.turn_on to support both lights and switches (relays)
+  - service: homeassistant.turn_on
     target: !input light_target
   - wait_for_trigger:
       - platform: state
@@ -47,5 +53,5 @@ action:
         from: "on"
         to: "off"
   - delay: !input off_delay
-  - service: light.turn_off
+  - service: homeassistant.turn_off
     target: !input light_target
