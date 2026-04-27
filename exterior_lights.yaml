@@ -41,9 +41,9 @@ mode: single
 
 trigger:
   platform: template
-    value_template: >
-    {% set doors = !input door_sensor %}
-    {{ expand(doors) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+      value_template: >
+      {% set doors = !input door_sensor %}
+      {{ expand(doors) | selectattr('state', 'eq', 'on') | list | count > 0 }}
 
 condition:
   # Check 1: Ensure all selected lights are currently OFF
