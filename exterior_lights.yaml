@@ -40,10 +40,10 @@ blueprint:
 mode: single
 
 trigger:
-  platform: state
-  entity_id: !input door_sensor
-  from: "off"
-  to: "on"
+  platform: template
+    value_template: >
+    {% set doors = !input door_sensor %}
+    {{ expand(doors) | selectattr('state', 'eq', 'on') | list | count > 0 }}
 
 condition:
   # Check 1: Ensure all selected lights are currently OFF
@@ -70,3 +70,4 @@ action:
   - service: homeassistant.turn_off
     target:
       entity_id: !input light_target
+
