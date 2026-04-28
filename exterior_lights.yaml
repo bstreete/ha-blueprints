@@ -10,7 +10,78 @@ input:
       entity:
         domain: binary_sensor
         device_class: door
+  name: Exterior Lights - Door Sensor (Final Fixed)
+  description: Turns on lights when a door opens, but ONLY if they were off AND it is dark.
+  domain: automation
+  input:
+    door_sensor:
+      name: Door Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: door
         multiple: true
+    light_target:
+      name: Exterior Lights or Relays
+      selector:
+        entity:
+          domain:
+            - light
+            - switch
+          multiple: true
+    sun_elevation:
+      name: Max Sun Elevation
+      description: Solar angle to stay below. 0 is sunset/sunrise.
+      default: 0
+      selector:
+        number:
+          min: -90.0
+          max: 90.0
+          step: 0.5
+          unit_of_measurement: degrees
+          mode: slider
+    off_delay:
+      name: Off Delay
+      default: 120
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: seconds
+
+mode: single
+
+trigger:
+  platform: state
+  entity_id: !input door_sensor
+  from: "off"
+  to: "on"
+
+condition:
+  # Check 1: Ensure all selected lights are currently OFF
+  - condition: template
+    value_template: >
+      {% set entities = !input light_target %}
+      {{ expand(entities) | selectattr('state', 'eq', 'on') | list | count == 0 }}
+  # Check 2: Ensure sun is below the threshold
+  - condition: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    below: !input sun_elevation
+
+action:
+  - service: homeassistant.turn_on
+    target:
+      entity_id: !input light_target
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input door_sensor
+        from: "on"
+        to: "off"
+  - delay: !input off_delay
+  - service: homeassistant.turn_off
+    target:
+      entity_id: !input light_target
   light_target:
     name: Exterior Lights or Relays
     selector:
